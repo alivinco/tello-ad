@@ -1,0 +1,3 @@
+#!/bin/bash
+systemctl stop things_plex_service_template.service
+systemctl disable things_plex_service_template.service

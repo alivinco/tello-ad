@@ -1,0 +1,14 @@
+[Unit]
+Description=IoT Flow logic engine
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/tello-ad -c config.json
+User=tello-ad
+WorkingDirectory=/var/lib/futurehome/tello-ad
+Restart=always
+StandardOutput=null
+StandardError=null
+
+[Install]
+WantedBy=multi-user.target
