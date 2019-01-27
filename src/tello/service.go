@@ -6,7 +6,6 @@ import (
 	"github.com/SMerrony/tello"
 	"github.com/disintegration/imaging"
 	"github.com/futurehomeno/fimpgo"
-	"github.com/futurehomeno/fimpgo/fimptype"
 	log "github.com/sirupsen/logrus"
 	"io/ioutil"
 	"os"
@@ -17,6 +16,7 @@ type TelloService struct {
 	drone        *tello.Tello
 	mq           *fimpgo.MqttTransport
 	inboundMsgCh fimpgo.MessageCh
+	batteryLevel int8
 }
 
 func NewTelloService(transport *fimpgo.MqttTransport) *TelloService {
@@ -45,6 +45,7 @@ func (svc *TelloService) Start() {
 			log.Errorf("Error: %v reconnecting...", err)
 			time.Sleep(time.Second*3)
 		}else {
+			svc.reportDroneConnectionState("UP")
 			break
 		}
 	}
@@ -109,9 +110,9 @@ func (svc *TelloService) routeFimpMessage(newMsg *fimpgo.Message) {
 				log.Debug("Take off command")
 				svc.drone.TakeOff()
 				time.Sleep(10 * time.Second)
-				svc.drone.AutoTurnByDeg(180)
+				svc.drone.AutoTurnToYaw(180)
 				time.Sleep(10 * time.Second)
-				svc.drone.AutoTurnByDeg(-180)
+				svc.drone.AutoTurnToYaw(-180)
 				log.Debug("Done")
 			}else {
 				log.Debug("Land command")
@@ -140,6 +141,90 @@ func (svc *TelloService) routeFimpMessage(newMsg *fimpgo.Message) {
 	case "camera":
 		switch newMsg.Payload.Type {
 		case "cmd.camera.get_image":
+			svc.sendImage()
+		}
+	case "drone":
+		switch newMsg.Payload.Type {
+		case "cmd.position.start_move":
+			val , err := newMsg.Payload.GetIntMapValue()
+			if err != nil {
+				return
+			}
+			up , ok := val["up"]
+			if ok {
+				svc.drone.Up(int(up))
+			}
+			down , ok := val["down"]
+			if ok {
+				svc.drone.Down(int(down))
+			}
+			left , ok := val["left"]
+			if ok {
+				svc.drone.Left(int(left))
+			}
+			right , ok := val["right"]
+			if ok {
+				svc.drone.Right(int(right))
+			}
+			forward , ok := val["forw"]
+			if ok {
+				svc.drone.Forward(int(forward))
+			}
+			backward , ok := val["back"]
+			if ok {
+				svc.drone.Backward(int(backward))
+			}
+			yaw , ok := val["yaw"]
+			if ok {
+				if yaw >= 0 {
+					svc.drone.Clockwise(int(yaw))
+				}else {
+					svc.drone.Anticlockwise(int(yaw))
+				}
+
+			}
+		case "cmd.mode.set":
+			val , err := newMsg.Payload.GetStringValue()
+			if err != nil {
+				return
+			}
+
+			//"take_off","throw_take_off","land","palm_land","stop_landing","right_flip","left_flip","set_home","back_flip","bounce"
+			switch val{
+			case "take_off":
+				svc.drone.TakeOff()
+			case "throw_take_off":
+				svc.drone.ThrowTakeOff()
+			case "land":
+				svc.drone.Land()
+			case "palm_land":
+				svc.drone.PalmLand()
+			case "stop_landing":
+				svc.drone.StopLanding()
+			case "right_flip":
+				svc.drone.RightFlip()
+			case "left_flip":
+				svc.drone.LeftFlip()
+			case "set_home":
+				svc.drone.SetHome()
+			case "back_flip":
+				svc.drone.BackFlip()
+			case "bounce":
+				svc.drone.Bounce()
+			case "reconnect":
+				svc.drone.ControlDisconnect()
+				time.Sleep(time.Second*1)
+				err := svc.drone.ControlConnectDefault()
+				if err != nil {
+					log.Errorf("Can't connect to drone .Error: %v ", err)
+					svc.reportDroneConnectionState("DOWN")
+				}else {
+					log.Info("Connected.")
+					svc.reportDroneConnectionState("UP")
+				}
+
+			}
+
 
 		}
 		//
@@ -159,140 +244,15 @@ func (svc *TelloService) routeFimpMessage(newMsg *fimpgo.Message) {
 
 }
 
-func (svc *TelloService) registerDrone() {
-
-	outLvlSwitchInterfaces := []fimptype.Interface{{
-		Type:      "in",
-		MsgType:   "cmd.binary.set",
-		ValueType: "bool",
-		Version:   "1",
-	}, {
-		Type:      "in",
-		MsgType:   "cmd.lvl.set",
-		ValueType: "int",
-		Version:   "1",
-	}, {
-		Type:      "in",
-		MsgType:   "cmd.lvl.start",
-		ValueType: "string",
-		Version:   "1",
-	}, {
-		Type:      "in",
-		MsgType:   "cmd.lvl.stop",
-		ValueType: "null",
-		Version:   "1",
-	}, {
-		Type:      "out",
-		MsgType:   "evt.lvl.report",
-		ValueType: "int",
-		Version:   "1",
-	}, {
-		Type:      "out",
-		MsgType:   "evt.binary.report",
-		ValueType: "bool",
-		Version:   "1",
-	}}
-
-	outBinSwitchInterfaces := []fimptype.Interface{{
-		Type:      "in",
-		MsgType:   "cmd.binary.set",
-		ValueType: "bool",
-		Version:   "1",
-	}, {
-		Type:      "in",
-		MsgType:   "cmd.binary.get_report",
-		ValueType: "int",
-		Version:   "1",
-	}, {
-		Type:      "out",
-		MsgType:   "evt.binary.report",
-		ValueType: "bool",
-		Version:   "1",
-	}}
-
-	cameraInterfaces := []fimptype.Interface{{
-		Type:      "in",
-		MsgType:   "cmd.camera.get_image",
-		ValueType: "string",
-		Version:   "1",
-	}, {
-		Type:      "out",
-		MsgType:   "evt.camera.image",
-		ValueType: "string",
-		Version:   "1",
-	}}
-
-	outLvlSwitchService := fimptype.Service{
-		Name:    "out_lvl_switch",
-		Alias:   "Rotation and camera",
-		Address: "/rt:dev/rn:tello/ad:1/sv:out_lvl_switch/ad:1_0",
-		Enabled: true,
-		Groups:  []string{"ch_0"},
-		Props: map[string]interface{}{
-			"max_lvl": 100,
-			"min_lvl": 0,
-		},
-		Tags:             nil,
-		PropSetReference: "",
-		Interfaces:       outLvlSwitchInterfaces,
-	}
-
-	outBinSwitchService := fimptype.Service{
-		Name:    "out_bin_switch",
-		Alias:   "Takeoff and landing",
-		Address: "/rt:dev/rn:tello/ad:1/sv:out_bin_switch/ad:1_0",
-		Enabled: true,
-		Groups:  []string{"ch_0"},
-		Props:  map[string]interface{}{},
-		Tags:             nil,
-		PropSetReference: "",
-		Interfaces:       outBinSwitchInterfaces,
-	}
-
-	cameraService := fimptype.Service{
-		Name:    "camera",
-		Alias:   "Camera",
-		Address: "/rt:dev/rn:tello/ad:1/sv:camera/ad:1_0",
-		Enabled: true,
-		Groups:  []string{"ch_0"},
-		Props:  map[string]interface{}{},
-		Tags:             nil,
-		PropSetReference: "",
-		Interfaces:       cameraInterfaces,
-	}
-
-	services := []fimptype.Service{outLvlSwitchService,outBinSwitchService,cameraService}
-
-	inclReport := fimptype.ThingInclusionReport{
-		IntegrationId:     "",
-		Address:           "1",
-		Type:              "",
-		ProductHash:       "TELLO-DR-1",
-		Alias:             "Tello drone",
-		CommTechnology:    "tello",
-		ProductId:         "T1",
-		ProductName:       "TELLO",
-		ManufacturerId:    "rezen",
-		DeviceId:          "dr1",
-		HwVersion:         "1",
-		SwVersion:         "1",
-		PowerSource:       "battery",
-		WakeUpInterval:    "-1",
-		Security:          "",
-		Tags:              nil,
-		Groups:            []string{"ch_0"},
-		PropSets:          nil,
-		TechSpecificProps: nil,
-		Services:          services,
-	}
-
-	msg := fimpgo.NewMessage("evt.thing.inclusion_report", "tello", fimpgo.VTypeObject, inclReport, nil, nil, nil)
-	adr := fimpgo.Address{MsgType: fimpgo.MsgTypeEvt, ResourceType: fimpgo.ResourceTypeAdapter, ResourceName: "tello", ResourceAddress: "1"}
-	svc.mq.Publish(&adr, msg)
-}
 
 func (svc *TelloService) onFlightData(data tello.FlightData) {
 	log.Infof("FD height = %d Battery = %d", data.Height,data.BatteryPercentage)
+	if svc.batteryLevel != data.BatteryPercentage {
+		svc.batteryLevel = data.BatteryPercentage
+		msg := fimpgo.NewIntMessage("evt.lvl.report", "battery", int64(svc.batteryLevel), nil, nil, nil)
+		adr := fimpgo.Address{MsgType: fimpgo.MsgTypeEvt, ResourceType: fimpgo.ResourceTypeDevice, ResourceName: "tello", ResourceAddress: "1",ServiceName:"battery",ServiceAddress:"1_0"}
+		svc.mq.Publish(&adr, msg)
+	}
 	log.Infof("FD X = %f Y = %f Z = %f" , data.MVO.PositionX,data.MVO.PositionY,data.MVO.PositionZ)
 
 }
@@ -356,6 +316,13 @@ func (svc *TelloService) sendImage() error{
 	return nil
 }
 
+
+
+func (svc *TelloService) reportDroneConnectionState(state string) {
+	msg := fimpgo.NewStringMessage("evt.state.report", "dev_sys", state, nil, nil, nil)
+	adr := fimpgo.Address{MsgType: fimpgo.MsgTypeEvt, ResourceType: fimpgo.ResourceTypeDevice, ResourceName: "tello", ResourceAddress: "1",ServiceName:"dev_sys",ServiceAddress:"1_0"}
+	svc.mq.Publish(&adr, msg)
+}
 func (svc *TelloService) droneEventRouter() {
 
 }
