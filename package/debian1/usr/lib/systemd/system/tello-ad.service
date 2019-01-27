@@ -1,5 +1,5 @@
 [Unit]
-Description=IoT Flow logic engine
+Description=Tello drone adapter
 
 [Service]
 Type=simple

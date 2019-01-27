@@ -50,12 +50,11 @@ case "$1" in
 	    echo "Configuring.."
 		add_user_and_group
 		set_ownership
-		migrate_fimpflows
-        if [ ! -d /var/log/thingsplex ]
+        if [ ! -d /var/log/thingsplex/tello-ad ]
         then
             echo "Setting up logging dir"
-            mkdir -m 774 /var/log/thingsplex
-            chown tello-ad:thingsplex /var/log/thingsplex
+            mkdir -m 775 -p /var/log/thingsplex/tello-ad
+            chown tello-ad:thingsplex /var/log/thingsplex/tello-ad
         fi
 		# Start thingsplex
 		if [ -f /opt/thingsplex/tello-ad/tello-ad ]
