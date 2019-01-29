@@ -1,0 +1,235 @@
+{
+  "type": "evt.thing.inclusion_report",
+  "serv": "tello",
+  "val_t": "object",
+  "val": {
+    "integr_id": "",
+    "address": "1",
+    "type": "",
+    "product_hash": "TELLO-DR-1",
+    "alias": "Tello drone",
+    "comm_tech": "tello",
+    "product_id": "T1",
+    "product_name": "TELLO",
+    "manufacturer_id": "rezen",
+    "device_id": "dr1",
+    "hw_ver": "1",
+    "sw_ver": "1",
+    "power_source": "battery",
+    "wakeup_interval": "-1",
+    "security": "",
+    "tags": null,
+    "groups": [
+      "ch_0",
+      "ch_1"
+    ],
+    "prop_set": null,
+    "tech_specific_props": null,
+    "services": [
+      {
+        "name": "out_lvl_switch",
+        "alias": "Drone rotation and camera",
+        "address": "/rt:dev/rn:tello/ad:1/sv:out_lvl_switch/ad:1_0",
+        "enabled": true,
+        "groups": [
+          "ch_0"
+        ],
+        "props": {
+          "max_lvl": 100,
+          "min_lvl": 0
+        },
+        "tags": null,
+        "prop_set_ref": "",
+        "interfaces": [
+          {
+            "intf_t": "in",
+            "msg_t": "cmd.binary.set",
+            "val_t": "bool",
+            "ver": "1"
+          },
+          {
+            "intf_t": "in",
+            "msg_t": "cmd.lvl.set",
+            "val_t": "int",
+            "ver": "1"
+          },
+          {
+            "intf_t": "in",
+            "msg_t": "cmd.lvl.start",
+            "val_t": "string",
+            "ver": "1"
+          },
+          {
+            "intf_t": "in",
+            "msg_t": "cmd.lvl.stop",
+            "val_t": "null",
+            "ver": "1"
+          },
+          {
+            "intf_t": "out",
+            "msg_t": "evt.lvl.report",
+            "val_t": "int",
+            "ver": "1"
+          },
+          {
+            "intf_t": "out",
+            "msg_t": "evt.binary.report",
+            "val_t": "bool",
+            "ver": "1"
+          }
+        ]
+      },
+      {
+        "name": "out_bin_switch",
+        "alias": "Drone takeoff and landing",
+        "address": "/rt:dev/rn:tello/ad:1/sv:out_bin_switch/ad:1_1",
+        "enabled": true,
+        "groups": [
+          "ch_1"
+        ],
+        "props": {},
+        "tags": null,
+        "prop_set_ref": "",
+        "interfaces": [
+          {
+            "intf_t": "in",
+            "msg_t": "cmd.binary.set",
+            "val_t": "bool",
+            "ver": "1"
+          },
+          {
+            "intf_t": "in",
+            "msg_t": "cmd.binary.get_report",
+            "val_t": "int",
+            "ver": "1"
+          },
+          {
+            "intf_t": "out",
+            "msg_t": "evt.binary.report",
+            "val_t": "bool",
+            "ver": "1"
+          }
+        ]
+      },
+      {
+        "name": "camera",
+        "alias": "Drone camera",
+        "address": "/rt:dev/rn:tello/ad:1/sv:camera/ad:1_0",
+        "enabled": true,
+        "groups": [
+          "ch_0"
+        ],
+        "props": {},
+        "tags": null,
+        "prop_set_ref": "",
+        "interfaces": [
+          {
+            "intf_t": "in",
+            "msg_t": "cmd.camera.get_image",
+            "val_t": "string",
+            "ver": "1"
+          },
+          {
+            "intf_t": "out",
+            "msg_t": "evt.camera.image",
+            "val_t": "string",
+            "ver": "1"
+          }
+        ]
+      },
+      {
+        "name": "drone",
+        "alias": "Drone control",
+        "address": "/rt:dev/rn:tello/ad:1/sv:drone/ad:1_0",
+        "enabled": true,
+        "groups": [
+          "ch_0"
+        ],
+        "props": {
+          "sup_modes": [
+            "take_off",
+            "throw_take_off",
+            "land",
+            "palm_land",
+            "stop_landing",
+            "right_flip",
+            "left_flip",
+            "set_home",
+            "back_flip",
+            "bounce",
+            "reconnect"
+          ],
+          "sup_moves": [
+            "right",
+            "left",
+            "up",
+            "down",
+            "forw",
+            "back",
+            "yaw"
+          ]
+        },
+        "tags": null,
+        "prop_set_ref": "",
+        "interfaces": [
+          {
+            "intf_t": "in",
+            "msg_t": "cmd.position.start_move",
+            "val_t": "str_map",
+            "ver": "1"
+          },
+          {
+            "intf_t": "out",
+            "msg_t": "cmd.position.change_to",
+            "val_t": "str_map",
+            "ver": "1"
+          },
+          {
+            "intf_t": "out",
+            "msg_t": "cmd.mode.set",
+            "val_t": "string",
+            "ver": "1"
+          }
+        ]
+      },
+      {
+        "name": "battery",
+        "alias": "Drone battery",
+        "address": "/rt:dev/rn:tello/ad:1/sv:battery/ad:1_0",
+        "enabled": true,
+        "groups": [
+          "ch_0"
+        ],
+        "props": {},
+        "tags": null,
+        "prop_set_ref": "",
+        "interfaces": [
+          {
+            "intf_t": "in",
+            "msg_t": "cmd.lvl.get_report",
+            "val_t": "null",
+            "ver": "1"
+          },
+          {
+            "intf_t": "out",
+            "msg_t": "evt.lvl.report",
+            "val_t": "int",
+            "ver": "1"
+          },
+          {
+            "intf_t": "out",
+            "msg_t": "evt.alarm.report",
+            "val_t": "str_map",
+            "ver": "1"
+          }
+        ]
+      }
+    ]
+  },
+  "tags": null,
+  "props": null,
+  "ver": "1",
+  "corid": "",
+  "ctime": "2019-01-29T19:47:58.634111+01:00",
+  "uid": "e1cc0b86-1570-4a40-a019-8df5528499ab"
+}

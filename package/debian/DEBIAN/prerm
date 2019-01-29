@@ -1,0 +1,3 @@
+#!/bin/bash
+systemctl stop tello-ad.service
+systemctl disable tello-ad.service

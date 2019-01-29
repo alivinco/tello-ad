@@ -1,4 +1,4 @@
-version="0.10.6"
+version="0.1.2"
 version_file=VERSION
 working_dir=$(shell pwd)
 arch="armhf"
@@ -10,7 +10,7 @@ build-go:
 	go build -o tello-ad src/service.go
 
 build-go-arm:
-	cd ./src;GOOS=linux GOARCH=arm GOARM=6 go build -o tello-ad src/service.go;cd ../
+	cd ./src;GOOS=linux GOARCH=arm GOARM=6 go build -o tello-ad service.go;cd ../
 
 build-go-amd:
 	GOOS=linux GOARCH=amd64 go build -o tello-ad src/service.go
@@ -28,16 +28,16 @@ package-tar:
 
 package-deb-doc-1:
 	@echo "Packaging application as debian package"
-	chmod a+x package/debian1/DEBIAN/*
-	cp tello-ad package/debian1/opt/thingsplex/tello-ad
-	cp VERSION package/debian1/opt/thingsplex/tello-ad
+	chmod a+x package/debian/DEBIAN/*
+	cp ./src/tello-ad package/debian/opt/thingsplex/tello-ad
+	cp VERSION package/debian/opt/thingsplex/tello-ad
 	docker run --rm -v ${working_dir}:/build -w /build --name debuild debian dpkg-deb --build package/debian
 	@echo "Done"
 
 package-deb-doc-2:
 	@echo "Packaging application as debian package"
 	chmod a+x package/debian2/DEBIAN/*
-	cp tello-ad package/debian2/usr/bin/tello-ad
+	cp .src/tello-ad package/debian2/usr/bin/tello-ad
 	cp VERSION package/debian2/opt/thingsplex/tello-ad
 	docker run --rm -v ${working_dir}:/build -w /build --name debuild debian dpkg-deb --build package/debian
 	@echo "Done"

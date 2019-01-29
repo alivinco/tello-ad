@@ -1,0 +1,8 @@
+Package: tello-ad
+Version: 0.1.2
+Replaces: tello-ad
+Section: non-free/misc
+Priority: optional
+Architecture: armhf
+Maintainer: Aleksandrs Livincovs <aleksandrs.livincovs@gmail.com>
+Description: .

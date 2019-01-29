@@ -9,6 +9,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"io/ioutil"
 	"os"
+	"runtime"
 	"time"
 )
 
@@ -17,6 +18,8 @@ type TelloService struct {
 	mq           *fimpgo.MqttTransport
 	inboundMsgCh fimpgo.MessageCh
 	batteryLevel int8
+	connectionState string
+	isDroneFlying bool
 }
 
 func NewTelloService(transport *fimpgo.MqttTransport) *TelloService {
@@ -28,6 +31,7 @@ func NewTelloService(transport *fimpgo.MqttTransport) *TelloService {
 }
 
 func (svc *TelloService) Start() {
+	svc.connectionState = "CONNECTING"
 	go func(msgChan fimpgo.MessageCh) {
 		for {
 			select {
@@ -38,31 +42,16 @@ func (svc *TelloService) Start() {
 		}
 
 	}(svc.inboundMsgCh)
-	svc.sendImage()
-	for {
-		err := svc.drone.ControlConnectDefault()
-		if err != nil {
-			log.Errorf("Error: %v reconnecting...", err)
-			time.Sleep(time.Second*3)
-		}else {
-			svc.reportDroneConnectionState("UP")
-			break
-		}
+	//svc.sendImage()
+	svc.connectToDrone()
+	if runtime.GOOS == "linux" {
+		svc.monitorWifiConnection()
 	}
+
 
 	log.Info("The system connected to the drone")
 	// ask drone for version ever minute . the operatoin should prevent drone from going into power saving mode
-	go func() {
-		for{
-			log.Debug("asking for connection status ")
-			 if svc.drone.ControlConnected() {
-				 log.Debug("Drone connected ")
-			 }else {
-				 log.Debug("-----Drone disconnected------ ")
-			 }
-			time.Sleep(time.Second*60)
-		}
-	}()
+
 
 	flightData , err :=  svc.drone.StreamFlightData(false,5000)
 	if err != nil {
@@ -77,6 +66,8 @@ func (svc *TelloService) Start() {
 		}
 	}()
 
+	svc.startDroneAntiPowerDownProcess()
+
 }
 
 func (svc *TelloService) routeFimpMessage(newMsg *fimpgo.Message) {
@@ -87,6 +78,7 @@ func (svc *TelloService) routeFimpMessage(newMsg *fimpgo.Message) {
 		case "cmd.lvl.set":
 			log.Debug("Turning")
 			val, _ := newMsg.Payload.GetIntValue()
+			origVal := val
 			//
 			val = val - 50 //
 			angle := int16(float64(val) * 3.6)
@@ -97,13 +89,17 @@ func (svc *TelloService) routeFimpMessage(newMsg *fimpgo.Message) {
 				log.Debug("Rotation reached the target :",ready)
 			}()
 
+			msg := fimpgo.NewIntMessage("evt.lvl.report", "out_lvl_switch", origVal, nil, nil, newMsg.Payload)
+			adr := fimpgo.Address{MsgType: fimpgo.MsgTypeEvt, ResourceType: fimpgo.ResourceTypeDevice, ResourceName: "tello", ResourceAddress: "1",ServiceName:"out_lvl_switch",ServiceAddress:"1_0"}
+			svc.mq.Publish(&adr, msg)
+
 		case "cmd.binary.set":
-			log.Debug("Taking picture")
-			svc.drone.TakePicture()
-			time.Sleep(time.Second*4)
-			svc.drone.SaveAllPics("img")
-			time.Sleep(time.Second*2)
-			svc.sendImage()
+			svc.TakePicture()
+			val , _ := newMsg.Payload.GetBoolValue()
+			msg := fimpgo.NewBoolMessage("evt.binary.report", "out_lvl_switch", val, nil, nil, newMsg.Payload)
+			adr := fimpgo.Address{MsgType: fimpgo.MsgTypeEvt, ResourceType: fimpgo.ResourceTypeDevice, ResourceName: "tello", ResourceAddress: "1",ServiceName:"out_lvl_switch",ServiceAddress:"1_0"}
+			svc.mq.Publish(&adr, msg)
+
 		case "cmd.lvl.start":
 			val, _ := newMsg.Payload.GetStringValue()
 			if val == "up" {
@@ -132,11 +128,18 @@ func (svc *TelloService) routeFimpMessage(newMsg *fimpgo.Message) {
 			if val {
 				log.Debug("Take off command")
 				svc.drone.TakeOff()
+				svc.isDroneFlying = true
 			} else {
 				log.Debug("Land command")
 				svc.drone.Land()
+				svc.isDroneFlying = false
 			}
 		}
+
+		val , _ := newMsg.Payload.GetBoolValue()
+		msg := fimpgo.NewBoolMessage("evt.binary.report", "out_bin_switch", val, nil, nil, newMsg.Payload)
+		adr := fimpgo.Address{MsgType: fimpgo.MsgTypeEvt, ResourceType: fimpgo.ResourceTypeDevice, ResourceName: "tello", ResourceAddress: "1",ServiceName:"out_bin_switch",ServiceAddress:"1_1"}
+		svc.mq.Publish(&adr, msg)
 		log.Debug("Sending switch")
 	case "camera":
 		switch newMsg.Payload.Type {
@@ -193,10 +196,12 @@ func (svc *TelloService) routeFimpMessage(newMsg *fimpgo.Message) {
 			switch val{
 			case "take_off":
 				svc.drone.TakeOff()
+				svc.isDroneFlying = true
 			case "throw_take_off":
 				svc.drone.ThrowTakeOff()
 			case "land":
 				svc.drone.Land()
+				svc.isDroneFlying = false
 			case "palm_land":
 				svc.drone.PalmLand()
 			case "stop_landing":
@@ -224,8 +229,6 @@ func (svc *TelloService) routeFimpMessage(newMsg *fimpgo.Message) {
 				}
 
 			}
-
-
 		}
 		//
 	case "tello":
@@ -247,6 +250,11 @@ func (svc *TelloService) routeFimpMessage(newMsg *fimpgo.Message) {
 
 func (svc *TelloService) onFlightData(data tello.FlightData) {
 	log.Infof("FD height = %d Battery = %d", data.Height,data.BatteryPercentage)
+	if data.Height == 0 {
+		svc.isDroneFlying = false
+	}else {
+		svc.isDroneFlying = true
+	}
 	if svc.batteryLevel != data.BatteryPercentage {
 		svc.batteryLevel = data.BatteryPercentage
 		msg := fimpgo.NewIntMessage("evt.lvl.report", "battery", int64(svc.batteryLevel), nil, nil, nil)
@@ -277,6 +285,28 @@ func (svc *TelloService) sendImage2() error{
 	}
 
 	return nil
+}
+
+func (svc *TelloService) TakePicture() {
+	for i:=0;i<10;i++ {
+		log.Debug("Taking picture")
+		err := svc.drone.TakePicture()
+		if err != nil {
+			log.Error("Can't take a picture . err:",err)
+			return
+		}
+		count , err := svc.drone.SaveAllPics("img")
+		if err != nil {
+			log.Error("Can't save picture . err:",err)
+			return
+		}
+		log.Infof("%d images transfered from drone",count)
+		if count >0 {
+			break
+		}
+		time.Sleep(1*time.Second)
+	}
+	svc.sendImage()
 }
 
 func (svc *TelloService) sendImage() error{
@@ -319,10 +349,22 @@ func (svc *TelloService) sendImage() error{
 
 
 func (svc *TelloService) reportDroneConnectionState(state string) {
+	if state == svc.connectionState {
+		return
+	}
 	msg := fimpgo.NewStringMessage("evt.state.report", "dev_sys", state, nil, nil, nil)
 	adr := fimpgo.Address{MsgType: fimpgo.MsgTypeEvt, ResourceType: fimpgo.ResourceTypeDevice, ResourceName: "tello", ResourceAddress: "1",ServiceName:"dev_sys",ServiceAddress:"1_0"}
 	svc.mq.Publish(&adr, msg)
+	svc.connectionState = state
 }
-func (svc *TelloService) droneEventRouter() {
 
+func (svc *TelloService) startDroneAntiPowerDownProcess() {
+	go func() {
+		for {
+			log.Debug("Executing measures to keep drone powered.")
+			svc.drone.ThrowTakeOff()
+			time.Sleep(40*time.Second)
+		}
+
+	}()
 }

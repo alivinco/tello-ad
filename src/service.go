@@ -69,8 +69,8 @@ func main() {
 	}else {
 		log.Info("Connected")
 	}
-	mqtt.Subscribe("pt:j1/+/rt:dev/rn:tello/ad:1/#")
-	mqtt.Subscribe("pt:j1/+/rt:ad/rn:tello/ad:1")
+	mqtt.Subscribe("pt:j1/mt:cmd/rt:dev/rn:tello/ad:1/#")
+	mqtt.Subscribe("pt:j1/mt:cmd/rt:ad/rn:tello/ad:1")
 
 	telloSvc := tello2.NewTelloService(mqtt)
 	telloSvc.Start()
