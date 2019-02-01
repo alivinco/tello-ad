@@ -20,6 +20,7 @@ type TelloService struct {
 	batteryLevel int8
 	connectionState string
 	isDroneFlying bool
+	photoMode string
 }
 
 func NewTelloService(transport *fimpgo.MqttTransport) *TelloService {
@@ -67,6 +68,7 @@ func (svc *TelloService) Start() {
 	}()
 
 	svc.startDroneAntiPowerDownProcess()
+
 
 }
 
@@ -124,21 +126,41 @@ func (svc *TelloService) routeFimpMessage(newMsg *fimpgo.Message) {
 		switch newMsg.Payload.Type {
 		case "cmd.binary.set":
 			// response evt.network.all_nodes_report
-			val, _ := newMsg.Payload.GetBoolValue()
-			if val {
-				log.Debug("Take off command")
-				svc.drone.TakeOff()
-				svc.isDroneFlying = true
-			} else {
-				log.Debug("Land command")
-				svc.drone.Land()
-				svc.isDroneFlying = false
+			if newMsg.Addr.ServiceAddress == "1_1" {
+				// Normal mode
+				val, _ := newMsg.Payload.GetBoolValue()
+				if val {
+					log.Debug("Take off command")
+					svc.drone.TakeOff()
+					svc.isDroneFlying = true
+				} else {
+					log.Debug("Land command")
+					svc.drone.Land()
+					svc.isDroneFlying = false
+				}
+			}else if newMsg.Addr.ServiceAddress == "1_2" {
+				// Demo mode
+				val, _ := newMsg.Payload.GetBoolValue()
+				if val {
+					log.Debug("Demo mode")
+					svc.drone.TakeOff()
+					svc.isDroneFlying = true
+					time.Sleep(5 * time.Second)
+					log.Debug("Going up to 1,5m")
+					svc.drone.AutoFlyToHeight(15)
+					time.Sleep(5 * time.Second)
+					svc.TakePicture()
+					svc.drone.BackFlip()
+					time.Sleep(5 * time.Second)
+					svc.drone.Land()
+				}
 			}
+
 		}
 
 		val , _ := newMsg.Payload.GetBoolValue()
 		msg := fimpgo.NewBoolMessage("evt.binary.report", "out_bin_switch", val, nil, nil, newMsg.Payload)
-		adr := fimpgo.Address{MsgType: fimpgo.MsgTypeEvt, ResourceType: fimpgo.ResourceTypeDevice, ResourceName: "tello", ResourceAddress: "1",ServiceName:"out_bin_switch",ServiceAddress:"1_1"}
+		adr := fimpgo.Address{MsgType: fimpgo.MsgTypeEvt, ResourceType: fimpgo.ResourceTypeDevice, ResourceName: "tello", ResourceAddress: "1",ServiceName:"out_bin_switch",ServiceAddress:newMsg.Addr.ServiceAddress}
 		svc.mq.Publish(&adr, msg)
 		log.Debug("Sending switch")
 	case "camera":
@@ -216,6 +238,12 @@ func (svc *TelloService) routeFimpMessage(newMsg *fimpgo.Message) {
 				svc.drone.BackFlip()
 			case "bounce":
 				svc.drone.Bounce()
+			case "photo_mode_0":
+				svc.photoMode = "photo_mode_0"
+				log.Info("Photo mode 0")
+			case "photo_mode_1":
+				svc.photoMode = "photo_mode_1"
+				log.Info("Photo mode 1")
 			case "reconnect":
 				svc.drone.ControlDisconnect()
 				time.Sleep(time.Second*1)
@@ -288,8 +316,11 @@ func (svc *TelloService) sendImage2() error{
 }
 
 func (svc *TelloService) TakePicture() {
-	for i:=0;i<10;i++ {
+	for i:=0;i<5;i++ {
 		log.Debug("Taking picture")
+		if svc.photoMode == "photo_mode_1" {
+			break
+		}
 		err := svc.drone.TakePicture()
 		if err != nil {
 			log.Error("Can't take a picture . err:",err)
@@ -311,7 +342,11 @@ func (svc *TelloService) TakePicture() {
 
 func (svc *TelloService) sendImage() error{
 	// Open file on disk.
-	f, err := os.Open("img_0.jpg")
+	fileName := "img_0.jpg"
+	if svc.photoMode == "photo_mode_1" {
+		fileName = "img_1.jpg"
+	}
+	f, err := os.Open(fileName)
 
 	if err != nil {
 		log.Errorf("Can't open image file. Err : ",err)

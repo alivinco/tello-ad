@@ -156,6 +156,18 @@ func (svc *TelloService) registerDrone() {
 		Interfaces:       outBinSwitchInterfaces,
 	}
 
+	outBinSwitchService2 := fimptype.Service{
+		Name:    "out_bin_switch",
+		Alias:   "Drone demo-observer mode",
+		Address: "/rt:dev/rn:tello/ad:1/sv:out_bin_switch/ad:1_2",
+		Enabled: true,
+		Groups:  []string{"ch_2"},
+		Props:  map[string]interface{}{},
+		Tags:             nil,
+		PropSetReference: "",
+		Interfaces:       outBinSwitchInterfaces,
+	}
+
 	cameraService := fimptype.Service{
 		Name:    "camera",
 		Alias:   "Drone camera",
@@ -168,7 +180,7 @@ func (svc *TelloService) registerDrone() {
 		Interfaces:       cameraInterfaces,
 	}
 
-	services := []fimptype.Service{outLvlSwitchService,outBinSwitchService,cameraService,droneService,batteryService}
+	services := []fimptype.Service{outLvlSwitchService,outBinSwitchService,outBinSwitchService2,cameraService,droneService,batteryService}
 
 	inclReport := fimptype.ThingInclusionReport{
 		IntegrationId:     "",
@@ -187,7 +199,7 @@ func (svc *TelloService) registerDrone() {
 		WakeUpInterval:    "-1",
 		Security:          "",
 		Tags:              nil,
-		Groups:            []string{"ch_0","ch_1"},
+		Groups:            []string{"ch_0","ch_1","ch_2"},
 		PropSets:          nil,
 		TechSpecificProps: nil,
 		Services:          services,

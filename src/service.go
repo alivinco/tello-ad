@@ -14,8 +14,6 @@ import (
 
 
 
-
-
 func SetupLog(logfile string, level string, logFormat string) {
 	if logFormat == "json" {
 		log.SetFormatter(&log.JSONFormatter{TimestampFormat: "2006-01-02 15:04:05.999"})
